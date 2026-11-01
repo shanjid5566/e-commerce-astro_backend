@@ -1,0 +1,33 @@
+# backend/docker-compose.yml
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: wintercart-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: wintercart_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Redis In-Memory Cache
+  redis:
+    image: redis:7-alpine
+    container_name: wintercart-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass secretredispassword
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+

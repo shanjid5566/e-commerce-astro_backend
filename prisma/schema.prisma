@@ -1,0 +1,165 @@
+// backend/prisma/schema.prisma
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum SupportStatus {
+  NEW
+  REPLIED
+  CLOSED
+}
+
+// Store Administrators (who log into /admin)
+model Admin {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  replies      SupportReply[]
+
+  @@index([email])
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  image       String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+}
+
+model Product {
+  id               String       @id @default(cuid())
+  title            String
+  slug             String       @unique
+  description      String
+  price            Decimal      @db.Decimal(10, 2)
+  originalPrice    Decimal?     @db.Decimal(10, 2)
+  badge            String?      // e.g. "NEW ARRIVAL", "BEST SELLER"
+  showInHeroBanner Boolean      @default(false)
+  category         Category     @relation(fields: [categoryId], references: [id])
+  categoryId       String
+  images           String[]     // Array of image URLs
+  sizes            String[]     // e.g. ["S", "M", "L", "XL", "XXL"]
+  stock            Int          @default(100)
+  orderItems       OrderItem[]
+  heroSlides       HeroSlide[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([categoryId])
+  @@index([showInHeroBanner])
+}
+
+// Guest Customer Orders
+model Order {
+  id            String      @id @default(cuid())
+  orderNumber   String      @unique // e.g. WC-98412
+  customerName  String
+  phone         String
+  address       String
+  city          String
+  totalAmount   Decimal     @db.Decimal(10, 2)
+  paymentMethod String      @default("Cash on Delivery")
+  status        OrderStatus @default(PENDING)
+  items         OrderItem[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([orderNumber])
+  @@index([phone])
+  @@index([status])
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String
+  title     String
+  size      String
+  quantity  Int
+  price     Decimal  @db.Decimal(10, 2)
+}
+
+model HeroSlide {
+  id          String   @id @default(cuid())
+  tag         String
+  title       String
+  subtitle    String
+  image       String
+  price       Decimal  @db.Decimal(10, 2)
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  product     Product? @relation(fields: [productId], references: [id])
+  productId   String?
+  createdAt   DateTime @default(now())
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  icon      String   @default("🔥")
+  text      String
+  link      String?
+  isActive  Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model SupportTicket {
+  id        String        @id @default(cuid())
+  ticketNo  String        @unique // e.g. MSG-101
+  name      String
+  phone     String
+  subject   String
+  message   String
+  status    SupportStatus @default(NEW)
+  reply     SupportReply?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([status])
+  @@index([phone])
+}
+
+model SupportReply {
+  id        String        @id @default(cuid())
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId  String        @unique
+  text      String
+  admin     Admin         @relation(fields: [adminId], references: [id])
+  adminId   String
+  createdAt DateTime      @default(now())
+}
+
+model SizeChart {
+  id        String   @id @default(cuid())
+  title     String
+  category  String
+  fitType   String
+  fabricTag String
+  unit      String   @default("Inches")
+  columns   String[]
+  rows      Json     // Array of { size: "M", measurements: { "Chest": "40\"" } }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
