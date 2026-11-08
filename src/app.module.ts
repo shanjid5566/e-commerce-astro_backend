@@ -4,6 +4,7 @@ import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { PrismaModule } from "./database/prisma.module";
 import { RedisModule } from "./redis/redis.module";
+import { AuthModule } from './modules/auth/auth.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -12,6 +13,7 @@ import { RedisModule } from "./redis/redis.module";
     }),
     PrismaModule,
     RedisModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -93,17 +93,19 @@
 ---
 
 ### Phase 2: Admin Authentication Module (`AuthModule`)
-- [ ] **Step 4: Auth DTOs & Password Utility**
+- [x] **Step 4: Auth DTOs & Password Utility**
   - `src/modules/auth/dto/login.dto.ts` (`email`, `password` validation)
   - `src/modules/auth/utils/password.util.ts` (`scryptSync` & `timingSafeEqual`)
-- [ ] **Step 5: JWT Strategy & Guard**
+- [x] **Step 5: JWT Strategy & Guard**
   - `src/modules/auth/strategies/jwt.strategy.ts` (Bearer token extraction & verification against DB)
   - `src/modules/auth/guards/jwt-auth.guard.ts` (Route guard)
   - `src/common/decorators/current-user.decorator.ts` (`@CurrentUser()`)
-- [ ] **Step 6: Auth Service & Controller**
+- [x] **Step 6: Auth Service & Controller**
   - `src/modules/auth/auth.service.ts` (`login()`, `getProfile()`)
   - `src/modules/auth/auth.controller.ts` (`POST /api/v1/auth/login`, `GET /api/v1/auth/me`)
   - `src/modules/auth/auth.module.ts` (Registers `PassportModule`, `JwtModule`)
+  - `wintercart.postman_collection.json` (Postman collection with auto token capture)
+
 
 ---
 
