@@ -24,12 +24,8 @@ export class PrismaService
     try {
       await this.$connect();
       this.logger.log("✅ PostgreSQL connected successfully via Prisma");
-    } catch (error) {
-      this.logger.error("❌ Failed to connect to PostgreSQL", error);
-      // In serverless environments (like Vercel), do not exit process so function runtime does not crash
-      if (!process.env.VERCEL) {
-        process.exit(1);
-      }
+    } catch (error: any) {
+      this.logger.error("❌ Failed to connect to PostgreSQL:", error.message || error);
     }
   }
   /**

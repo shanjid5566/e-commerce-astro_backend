@@ -28,8 +28,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     const port = Number(this.configService.get<Number>("REDIS_PORT", 6379));
     const password = this.configService.get<string>("REDIS_PASSWORD");
 
+    const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
+
     // In serverless environments (e.g. Vercel), if REDIS_URL is not provided, skip connecting to localhost
-    if (!redisUrl && (process.env.VERCEL || process.env.NODE_ENV === "production") && host === "localhost") {
+    if (!redisUrl && (isVercel || process.env.NODE_ENV === "production")) {
       this.logger.warn("⚠️ REDIS_URL is not configured in production. Caching will run in bypass mode.");
       return;
     }
@@ -37,18 +39,20 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       if (redisUrl) {
         this.client = new Redis(redisUrl, {
-          maxRetriesPerRequest: 3,
+          maxRetriesPerRequest: 1,
+          connectTimeout: 2000,
           lazyConnect: true,
-          retryStrategy: (times) => (times > 3 ? null : Math.min(times * 100, 1000)),
+          retryStrategy: (times) => (times > 2 ? null : Math.min(times * 100, 500)),
         });
       } else {
         this.client = new Redis({
           host,
           port,
           password: password || undefined,
-          maxRetriesPerRequest: 3,
+          maxRetriesPerRequest: 1,
+          connectTimeout: 2000,
           lazyConnect: true,
-          retryStrategy: (times) => (times > 3 ? null : Math.min(times * 100, 1000)),
+          retryStrategy: (times) => (times > 2 ? null : Math.min(times * 100, 500)),
         });
       }
 
