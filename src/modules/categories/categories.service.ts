@@ -16,8 +16,10 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 @Injectable()
 export class CategoriesService {
   private readonly logger = new Logger(CategoriesService.name);
+
   // Redis cache key for all categories
   private readonly CACHE_KEY = 'cache:categories:all';
+
   // 2 hours Time-To-Live in seconds
   private readonly CACHE_TTL = 7200;
 
@@ -39,10 +41,10 @@ export class CategoriesService {
   }
 
   /**
-   * Retrieve all categories with product counts (Cached in Redis for blazing-fast speed).
+   * Retrieve all categories with product counts (Cached in Redis & L1 RAM for blazing-fast speed).
    */
   async findAll() {
-    // 1. Check Redis Cache
+    // 1. Check Cache (L1 Memory & L2 Redis)
     const cached = await this.redis.get<any[]>(this.CACHE_KEY);
     if (cached) {
       return cached;
@@ -69,7 +71,7 @@ export class CategoriesService {
       createdAt: cat.createdAt,
     }));
 
-    // 3. Store in Redis with TTL
+    // 3. Store in Cache with TTL
     await this.redis.set(this.CACHE_KEY, formatted, this.CACHE_TTL);
 
     return formatted;
@@ -136,11 +138,28 @@ export class CategoriesService {
   }
 
   /**
-   * Update an existing category and invalidate cache.
+   * Helper to resolve either a CUID id or URL slug to an exact database ID.
    */
-  async update(id: string, dto: UpdateCategoryDto) {
-    // Ensure category exists
-    await this.findBySlug(id);
+  private async resolveCategoryId(idOrSlug: string): Promise<string> {
+    const category = await this.prisma.category.findFirst({
+      where: {
+        OR: [{ id: idOrSlug }, { slug: idOrSlug }],
+      },
+      select: { id: true },
+    });
+
+    if (!category) {
+      throw new NotFoundException(`Category '${idOrSlug}' not found`);
+    }
+
+    return category.id;
+  }
+
+  /**
+   * Update an existing category and invalidate cache asynchronously.
+   */
+  async update(idOrSlug: string, dto: UpdateCategoryDto) {
+    const targetId = await this.resolveCategoryId(idOrSlug);
 
     let updatedSlug = dto.slug ? this.generateSlug(dto.slug) : undefined;
     if (dto.name && !dto.slug) {
@@ -148,7 +167,7 @@ export class CategoriesService {
     }
 
     const updated = await this.prisma.category.update({
-      where: { id },
+      where: { id: targetId },
       data: {
         name: dto.name,
         slug: updatedSlug,
@@ -157,24 +176,24 @@ export class CategoriesService {
       },
     });
 
-    // Invalidate cache
-    await this.redis.del(this.CACHE_KEY);
+    // Invalidate cache asynchronously without blocking client response
+    this.redis.del(this.CACHE_KEY).catch((err) => this.logger.error('Cache purge error', err));
 
     return updated;
   }
 
   /**
-   * Delete category and invalidate cache.
+   * Delete category and invalidate cache asynchronously.
    */
-  async remove(id: string) {
-    await this.findBySlug(id);
+  async remove(idOrSlug: string) {
+    const targetId = await this.resolveCategoryId(idOrSlug);
 
     await this.prisma.category.delete({
-      where: { id },
+      where: { id: targetId },
     });
 
-    // Invalidate cache
-    await this.redis.del(this.CACHE_KEY);
+    // Non-blocking cache invalidation
+    this.redis.del(this.CACHE_KEY).catch((err) => this.logger.error('Cache purge error', err));
 
     return { message: 'Category deleted successfully' };
   }

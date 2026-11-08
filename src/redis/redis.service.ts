@@ -1,3 +1,4 @@
+// backend/src/redis/redis.service.ts
 import {
   Injectable,
   OnModuleInit,
@@ -8,14 +9,27 @@ import { ConfigService } from "@nestjs/config";
 import Redis from "ioredis";
 
 /**
- * RedisService provides high-performance in-memory caching and cache invalidation.
+ * L1 in-memory cache entry structure.
  */
+interface L1CacheEntry {
+  value: any;
+  expiresAt: number;
+}
 
+/**
+ * RedisService provides high-performance multi-tier caching:
+ * - L1: In-memory RAM cache (< 0.05ms) for instant local hits
+ * - L2: Distributed Redis cache for cross-server synchronization
+ */
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
-
   private client: Redis;
+
+  // L1 In-Memory Cache (RAM) to eliminate WAN latency to remote Redis Cloud
+  private readonly l1Cache = new Map<string, L1CacheEntry>();
+  private readonly L1_DEFAULT_TTL_SEC = 60; // 1 minute in local RAM
+
   // Inject ConfigService to read REDIS_URL or REDIS_HOST from .env
   constructor(private readonly configService: ConfigService) {}
 
@@ -30,7 +44,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
 
-    // In serverless environments (e.g. Vercel), if REDIS_URL is not provided, skip connecting to localhost
+    // In serverless environments, if REDIS_URL is not provided, skip localhost connection
     if (!redisUrl && (isVercel || process.env.NODE_ENV === "production")) {
       this.logger.warn("⚠️ REDIS_URL is not configured in production. Caching will run in bypass mode.");
       return;
@@ -70,6 +84,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.logger.error("❌ Failed to initialize Redis client:", err.message);
     }
   }
+
   /**
    * Gracefully close Redis connection on application shutdown.
    */
@@ -81,14 +96,33 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Retrieve cached item and parse JSON automatically.
+   * Retrieve cached item with L1 RAM fast-path.
    */
   async get<T>(key: string): Promise<T | null> {
+    const now = Date.now();
+
+    // 1. Fast L1 In-Memory Cache Check (< 0.05ms)
+    const l1Entry = this.l1Cache.get(key);
+    if (l1Entry && now < l1Entry.expiresAt) {
+      return l1Entry.value as T;
+    } else if (l1Entry) {
+      this.l1Cache.delete(key);
+    }
+
+    // 2. L2 Redis Cache Check (~200ms remote network round-trip)
     if (!this.client) return null;
     try {
       const data = await this.client.get(key);
       if (!data) return null;
-      return JSON.parse(data) as T;
+      const parsed = JSON.parse(data) as T;
+
+      // Populate L1 cache for subsequent instant hits
+      this.l1Cache.set(key, {
+        value: parsed,
+        expiresAt: now + this.L1_DEFAULT_TTL_SEC * 1000,
+      });
+
+      return parsed;
     } catch (error) {
       this.logger.error(`Error reading Redis key: ${key}`, error);
       return null;
@@ -96,9 +130,19 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Store data in Redis with an optional Time-To-Live (TTL in seconds).
+   * Store data in both L1 (local memory) and L2 (Redis).
    */
   async set(key: string, value: any, ttlSeconds: number = 3600): Promise<void> {
+    const now = Date.now();
+    const l1Ttl = Math.min(ttlSeconds, this.L1_DEFAULT_TTL_SEC);
+
+    // Write to L1 RAM immediately (< 0.01ms)
+    this.l1Cache.set(key, {
+      value,
+      expiresAt: now + l1Ttl * 1000,
+    });
+
+    // Write to L2 Redis asynchronously
     if (!this.client) return;
     try {
       const serialized = JSON.stringify(value);
@@ -113,9 +157,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Delete a specific cache key.
+   * Delete a specific cache key from both L1 and L2.
    */
   async del(key: string): Promise<void> {
+    // Purge L1 immediately
+    this.l1Cache.delete(key);
+
     if (!this.client) return;
     try {
       await this.client.del(key);
@@ -125,11 +172,17 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Delete all keys matching a pattern (e.g. "products:*").
-   * Uses SCAN instead of KEYS to avoid blocking the single-threaded Redis event loop in production.
+   * Delete all keys matching a pattern (e.g. "cache:*").
    */
-
   async invalidatePattern(pattern: string): Promise<void> {
+    // Purge matching keys from L1
+    const prefix = pattern.replace('*', '');
+    for (const key of this.l1Cache.keys()) {
+      if (key.startsWith(prefix) || pattern === '*') {
+        this.l1Cache.delete(key);
+      }
+    }
+
     if (!this.client) return;
     try {
       const stream = this.client.scanStream({

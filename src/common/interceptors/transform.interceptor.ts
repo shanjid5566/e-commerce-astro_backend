@@ -4,36 +4,60 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
+  Logger,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { Request, Response } from 'express';
 
 /**
- * Standard API response envelope interface.
+ * Standard API response envelope interface with execution timing.
  */
 export interface ApiResponse<T> {
   success: boolean;
   statusCode: number;
   data: T;
   timestamp: string;
+  executionTime: string;
 }
 
 /**
- * TransformInterceptor intercepts every outgoing response and wraps it in a standard envelope.
+ * TransformInterceptor wraps all outgoing responses and measures exact API response time.
  */
 @Injectable()
 export class TransformInterceptor<T> implements NestInterceptor<T, ApiResponse<T>> {
+  private readonly logger = new Logger('HTTP');
+
   intercept(context: ExecutionContext, next: CallHandler): Observable<ApiResponse<T>> {
-    const response = context.switchToHttp().getResponse();
-    const statusCode = response.statusCode;
+    const startTime = Date.now();
+    const ctx = context.switchToHttp();
+    const request = ctx.getRequest<Request>();
+    const response = ctx.getResponse<Response>();
 
     return next.handle().pipe(
-      map((data) => ({
-        success: true,
-        statusCode,
-        data: data ?? null,
-        timestamp: new Date().toISOString(),
-      })),
+      map((data) => {
+        const statusCode = response.statusCode;
+        const duration = Date.now() - startTime;
+        const executionTime = `${duration}ms`;
+
+        // Set response header for frontend / postman inspection
+        response.setHeader('X-Response-Time', executionTime);
+
+        // Color-coded log for terminal observability
+        if (duration > 500) {
+          this.logger.warn(`🐢 [${request.method}] ${request.originalUrl} - ${statusCode} [${executionTime}] (Slow query)`);
+        } else {
+          this.logger.log(`⚡ [${request.method}] ${request.originalUrl} - ${statusCode} [${executionTime}]`);
+        }
+
+        return {
+          success: true,
+          statusCode,
+          data: data ?? null,
+          timestamp: new Date().toISOString(),
+          executionTime,
+        };
+      }),
     );
   }
 }
