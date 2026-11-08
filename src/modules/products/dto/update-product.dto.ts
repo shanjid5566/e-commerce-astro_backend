@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsBoolean,
   IsArray,
+  IsInt,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -43,7 +44,15 @@ export class UpdateProductDto {
 
   @IsOptional()
   @IsBoolean()
+  isFeatured?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   showInHeroBanner?: boolean;
+
+  @IsOptional()
+  @IsString()
+  heroSubtitle?: string;
 
   @IsOptional()
   @IsString()
@@ -55,9 +64,23 @@ export class UpdateProductDto {
   images?: string[];
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  primaryImageIndex?: number;
+
+  @IsOptional()
+  @IsString()
+  primaryImage?: string;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   sizes?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  inStock?: boolean;
 
   @IsOptional()
   @Type(() => Number)
@@ -65,4 +88,3 @@ export class UpdateProductDto {
   @Min(0)
   stock?: number;
 }
-

@@ -8,6 +8,7 @@ import {
   IsBoolean,
   IsArray,
   ArrayMinSize,
+  IsInt,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -44,7 +45,15 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsBoolean()
+  isFeatured?: boolean = false;
+
+  @IsOptional()
+  @IsBoolean()
   showInHeroBanner?: boolean = false;
+
+  @IsOptional()
+  @IsString()
+  heroSubtitle?: string;
 
   @IsString()
   @IsNotEmpty({ message: 'Valid categoryId is required' })
@@ -56,9 +65,23 @@ export class CreateProductDto {
   images: string[];
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  primaryImageIndex?: number;
+
+  @IsOptional()
+  @IsString()
+  primaryImage?: string;
+
+  @IsOptional()
   @IsArray({ message: 'Sizes must be an array of strings' })
   @IsString({ each: true })
   sizes?: string[] = ['S', 'M', 'L', 'XL', 'XXL'];
+
+  @IsOptional()
+  @IsBoolean()
+  inStock?: boolean = true;
 
   @IsOptional()
   @Type(() => Number)
@@ -66,4 +89,3 @@ export class CreateProductDto {
   @Min(0)
   stock?: number = 100;
 }
-

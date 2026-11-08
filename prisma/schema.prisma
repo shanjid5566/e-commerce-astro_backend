@@ -54,12 +54,15 @@ model Product {
   price            Decimal      @db.Decimal(10, 2)
   originalPrice    Decimal?     @db.Decimal(10, 2)
   badge            String?      // e.g. "NEW ARRIVAL", "BEST SELLER"
+  isFeatured       Boolean      @default(false)
   showInHeroBanner Boolean      @default(false)
+  heroSubtitle     String?
   category         Category     @relation(fields: [categoryId], references: [id])
   categoryId       String
   images           String[]     // Array of image URLs
   sizes            String[]     // e.g. ["S", "M", "L", "XL", "XXL"]
   stock            Int          @default(100)
+  inStock          Boolean      @default(true)
   orderItems       OrderItem[]
   heroSlides       HeroSlide[]
   createdAt        DateTime     @default(now())
@@ -67,6 +70,7 @@ model Product {
 
   @@index([categoryId])
   @@index([showInHeroBanner])
+  @@index([inStock])
 }
 
 // Guest Customer Orders

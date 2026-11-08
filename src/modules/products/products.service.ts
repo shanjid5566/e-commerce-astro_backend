@@ -38,13 +38,61 @@ export class ProductsService {
   }
 
   /**
+   * Reorders image array to ensure the designated primary image is always at index 0.
+   */
+  private arrangeImages(
+    images: string[],
+    primaryIndex?: number,
+    primaryUrl?: string,
+  ): string[] {
+    if (!images || images.length <= 1) return images || [];
+    const copy = [...images];
+
+    if (
+      typeof primaryIndex === 'number' &&
+      primaryIndex >= 0 &&
+      primaryIndex < copy.length
+    ) {
+      const [primary] = copy.splice(primaryIndex, 1);
+      copy.unshift(primary);
+      return copy;
+    }
+
+    if (primaryUrl && copy.includes(primaryUrl)) {
+      return [primaryUrl, ...copy.filter((img) => img !== primaryUrl)];
+    }
+
+    return copy;
+  }
+
+  /**
+   * Standardizes product data for storefront consumption.
+   * Maps images[0] to the primary 'image' property and serializes Decimals to Numbers.
+   */
+  private formatProduct(product: any) {
+    if (!product) return null;
+    const images = Array.isArray(product.images) ? product.images : [];
+    return {
+      ...product,
+      price: product.price ? Number(product.price) : 0,
+      originalPrice: product.originalPrice ? Number(product.originalPrice) : null,
+      image: images[0] || '', // Primary thumbnail is always index 0
+      images,
+      inStock: product.inStock !== undefined ? product.inStock : product.stock > 0,
+      heroSubtitle: product.heroSubtitle || product.title,
+    };
+  }
+
+  /**
    * Helper function to purge all product and category-related caches.
    */
   private async invalidateCache(): Promise<void> {
     try {
       await Promise.all([
-        this.redis.invalidatePattern('cache:products:*'),
+        this.redis.del('cache:products:hero'),
+        this.redis.del('cache:products:featured'),
         this.redis.del('cache:categories:all'),
+        this.redis.invalidatePattern('cache:products:*'),
       ]);
     } catch (err: any) {
       this.logger.error(`Cache invalidation error: ${err.message}`);
@@ -138,7 +186,7 @@ export class ProductsService {
     ]);
 
     const result = {
-      items: products,
+      items: products.map((p) => this.formatProduct(p)),
       meta: {
         total,
         page,
@@ -171,8 +219,9 @@ export class ProductsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    await this.redis.set(cacheKey, products, this.CACHE_TTL_CATALOG);
-    return products;
+    const formatted = products.map((p) => this.formatProduct(p));
+    await this.redis.set(cacheKey, formatted, this.CACHE_TTL_CATALOG);
+    return formatted;
   }
 
   /**
@@ -185,7 +234,11 @@ export class ProductsService {
 
     const products = await this.prisma.product.findMany({
       where: {
-        OR: [{ badge: { not: null } }, { showInHeroBanner: true }],
+        OR: [
+          { isFeatured: true },
+          { badge: { not: null } },
+          { showInHeroBanner: true },
+        ],
       },
       include: {
         category: {
@@ -196,14 +249,19 @@ export class ProductsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    await this.redis.set(cacheKey, products, this.CACHE_TTL_CATALOG);
-    return products;
+    const formatted = products.map((p) => this.formatProduct(p));
+    await this.redis.set(cacheKey, formatted, this.CACHE_TTL_CATALOG);
+    return formatted;
   }
 
   /**
-   * Public: Retrieve single product detail by slug or id.
+   * Public: Retrieve a single product by its unique slug or CUID id.
    */
   async findByIdOrSlug(idOrSlug: string) {
+    return this.findOne(idOrSlug);
+  }
+
+  async findOne(idOrSlug: string) {
     const cacheKey = `cache:products:detail:${idOrSlug}`;
     const cached = await this.redis.get<any>(cacheKey);
     if (cached) return cached;
@@ -223,8 +281,9 @@ export class ProductsService {
       throw new NotFoundException(`Product '${idOrSlug}' not found`);
     }
 
-    await this.redis.set(cacheKey, product, this.CACHE_TTL_DETAIL);
-    return product;
+    const formatted = this.formatProduct(product);
+    await this.redis.set(cacheKey, formatted, this.CACHE_TTL_DETAIL);
+    return formatted;
   }
 
   /**
@@ -256,6 +315,13 @@ export class ProductsService {
       throw new ConflictException(`Product with slug '${slug}' already exists`);
     }
 
+    // 4. Arrange primary image at index 0
+    const finalImages = this.arrangeImages(
+      dto.images,
+      dto.primaryImageIndex,
+      dto.primaryImage,
+    );
+
     const product = await this.prisma.product.create({
       data: {
         title: dto.title,
@@ -264,11 +330,14 @@ export class ProductsService {
         price: dto.price,
         originalPrice: dto.originalPrice,
         badge: dto.badge,
+        isFeatured: dto.isFeatured ?? false,
         showInHeroBanner: dto.showInHeroBanner ?? false,
+        heroSubtitle: dto.heroSubtitle || dto.title,
         categoryId: category.id,
-        images: dto.images,
+        images: finalImages,
         sizes: dto.sizes || ['S', 'M', 'L', 'XL', 'XXL'],
-        stock: dto.stock ?? 100,
+        inStock: dto.inStock ?? true,
+        stock: dto.stock ?? (dto.inStock === false ? 0 : 100),
       },
       include: {
         category: {
@@ -280,7 +349,7 @@ export class ProductsService {
     // Invalidate caches asynchronously
     this.invalidateCache();
 
-    return product;
+    return this.formatProduct(product);
   }
 
   /**
@@ -309,6 +378,31 @@ export class ProductsService {
       updatedSlug = this.generateSlug(dto.title);
     }
 
+    // Arrange images if provided or if primary image selection changed
+    let finalImages: string[] | undefined;
+    if (dto.images) {
+      finalImages = this.arrangeImages(
+        dto.images,
+        dto.primaryImageIndex,
+        dto.primaryImage,
+      );
+    } else if (
+      dto.primaryImageIndex !== undefined ||
+      dto.primaryImage !== undefined
+    ) {
+      const current = await this.prisma.product.findUnique({
+        where: { id: targetId },
+        select: { images: true },
+      });
+      if (current?.images) {
+        finalImages = this.arrangeImages(
+          current.images,
+          dto.primaryImageIndex,
+          dto.primaryImage,
+        );
+      }
+    }
+
     const updated = await this.prisma.product.update({
       where: { id: targetId },
       data: {
@@ -318,11 +412,14 @@ export class ProductsService {
         price: dto.price,
         originalPrice: dto.originalPrice,
         badge: dto.badge,
+        isFeatured: dto.isFeatured,
         showInHeroBanner: dto.showInHeroBanner,
+        heroSubtitle: dto.heroSubtitle,
         categoryId: resolvedCategoryId,
-        images: dto.images,
+        images: finalImages,
         sizes: dto.sizes,
-        stock: dto.stock,
+        inStock: dto.inStock,
+        stock: dto.stock ?? (dto.inStock === false ? 0 : undefined),
       },
       include: {
         category: {
@@ -334,7 +431,7 @@ export class ProductsService {
     // Invalidate caches asynchronously
     this.invalidateCache();
 
-    return updated;
+    return this.formatProduct(updated);
   }
 
   /**
@@ -353,4 +450,3 @@ export class ProductsService {
     return { message: 'Product deleted successfully' };
   }
 }
-
