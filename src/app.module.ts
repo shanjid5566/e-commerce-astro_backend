@@ -11,6 +11,7 @@ import { UploadsModule } from "./modules/uploads/uploads.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { AnnouncementsModule } from "./modules/announcements/announcements.module";
 import { HeroSlidesModule } from "./modules/hero-slides/hero-slides.module";
+import { OrdersModule } from "./modules/orders/orders.module";
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { HeroSlidesModule } from "./modules/hero-slides/hero-slides.module";
     ProductsModule,
     AnnouncementsModule,
     HeroSlidesModule,
+    OrdersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

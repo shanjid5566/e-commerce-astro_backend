@@ -162,18 +162,22 @@
 ---
 
 ### Phase 6: Orders & Checkout Module (`OrdersModule`)
-- [ ] **Step 13: Order Creation (Atomic Transaction)**
+- [x] **Step 13: Order Creation (Atomic Transaction)**
+  - DTOs: `CreateOrderDto`, `CreateOrderItemDto`
   - Public Guest Checkout: `POST /api/v1/orders`
   - Validates `customerName`, `phone`, `address`, `city`, `items: [{ productId, size, quantity }]`.
   - **Prisma `$transaction`**:
-    1. Fetch current product prices from database (never trust client prices).
-    2. Decrement product stock.
+    1. Fetch current product prices from database (authoritative source).
+    2. Enforce `inStock` availability check.
     3. Calculate delivery fee (Free if subtotal $\ge 2,500$ ৳, else 70 ৳).
-    4. Generate human-readable `orderNumber` (e.g. `WC-98412`).
-    5. Save `Order` and `OrderItem` records.
-- [ ] **Step 14: Order Tracking & Admin Fulfillment**
-  - Public: `GET /api/v1/orders/track?orderNumber=...&phone=...`
-  - Admin: `GET /api/v1/orders` (filter by status, paginated), `PATCH /api/v1/orders/:id/status`
+    4. Generate human-readable `orderNumber` (e.g. `WC-84920`).
+    5. Save `Order` and `OrderItem` records atomically.
+- [x] **Step 14: Order Tracking & Admin Fulfillment**
+  - Public Tracking: `GET /api/v1/orders/track?orderNumber=...&phone=...` (returns 4-step progress timeline)
+  - Admin List: `GET /api/v1/orders` (filter by status, search, pagination)
+  - Admin Detail: `GET /api/v1/orders/:idOrOrderNumber`
+  - Admin Status Update: `PATCH /api/v1/orders/:idOrOrderNumber/status` (`PENDING` -> `PROCESSING` -> `SHIPPED` -> `DELIVERED` -> `CANCELLED`)
+  - Updated `wintercart.postman_collection.json` with all Orders endpoints
 
 ---
 
