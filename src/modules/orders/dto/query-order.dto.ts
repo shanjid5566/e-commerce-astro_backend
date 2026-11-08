@@ -24,3 +24,4 @@ export class QueryOrderDto {
   @Min(1)
   limit?: number = 10;
 }
+
