@@ -1,3 +1,4 @@
+// backend/src/app.module.ts
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { AppController } from "./app.controller";
@@ -7,6 +8,10 @@ import { RedisModule } from "./redis/redis.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CategoriesModule } from "./modules/categories/categories.module";
 import { UploadsModule } from "./modules/uploads/uploads.module";
+import { ProductsModule } from "./modules/products/products.module";
+import { AnnouncementsModule } from "./modules/announcements/announcements.module";
+import { HeroSlidesModule } from "./modules/hero-slides/hero-slides.module";
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -18,6 +23,9 @@ import { UploadsModule } from "./modules/uploads/uploads.module";
     AuthModule,
     CategoriesModule,
     UploadsModule,
+    ProductsModule,
+    AnnouncementsModule,
+    HeroSlidesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

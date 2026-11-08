@@ -133,23 +133,31 @@
 ---
 
 ### Phase 4: Products Catalog Module (`ProductsModule`)
-- [ ] **Step 9: Product Query DTOs & Service**
-  - Filter by `category` slug, `minPrice`, `maxPrice`, `search`, `sort` (`price_asc`, `price_desc`, `newest`), pagination (`page`, `limit`).
-  - Redis cache key composed of query hash: `products:list:<hash>` (5-minute TTL).
-  - Detail lookup: `products:detail:<slug>`.
-  - Mutation methods: `create()`, `update()`, `remove()` with `redisService.invalidatePattern('products:*')`.
-- [ ] **Step 10: Product Controller & Endpoints**
-  - Public: `GET /api/v1/products`, `GET /api/v1/products/:id`, `GET /api/v1/products/hero-banner`
-  - Admin: `POST`, `PATCH`, `DELETE`
+- [x] **Step 9: Product Query DTOs & Service**
+  - DTOs: `CreateProductDto`, `UpdateProductDto`, `QueryProductDto`
+  - Service: `ProductsService` (Search, filter, pagination, sorting, hero banners, featured products, L1/L2 Redis caching, cache eviction)
+- [x] **Step 10: Product Controller & Endpoints**
+  - Public: `GET /api/v1/products`, `GET /api/v1/products/:idOrSlug`, `GET /api/v1/products/hero-banner`, `GET /api/v1/products/featured`
+  - Admin: `POST /api/v1/products`, `PATCH /api/v1/products/:id`, `DELETE /api/v1/products/:id`
+  - Updated `wintercart.postman_collection.json` with all Products endpoints
+
 
 ---
 
 ### Phase 5: Hero Slides & Announcements Modules
-- [ ] **Step 11: Announcements Module**
-  - Public: `GET /api/v1/announcements` (Cached in Redis)
-  - Admin: Full CRUD with immediate cache eviction.
-- [ ] **Step 12: Hero Slides Module**
-  - Manage homepage top banners.
+- [x] **Step 11: Announcements Module**
+  - DTOs: `CreateAnnouncementDto`, `UpdateAnnouncementDto`
+  - Service: `AnnouncementsService` (L1/L2 multi-tier caching, sub-millisecond retrieval, asynchronous cache eviction)
+  - Controller: `AnnouncementsController`
+    - Public: `GET /api/v1/announcements` (Cached)
+    - Admin: `GET /api/v1/announcements/admin`, `GET /api/v1/announcements/:id`, `POST /api/v1/announcements`, `PATCH /api/v1/announcements/:id`, `DELETE /api/v1/announcements/:id`
+- [x] **Step 12: Hero Slides Module**
+  - DTOs: `CreateHeroSlideDto`, `UpdateHeroSlideDto`
+  - Service: `HeroSlidesService` (Homepage carousel slide management, product relation linking, Decimal normalization, multi-tier caching)
+  - Controller: `HeroSlidesController`
+    - Public: `GET /api/v1/hero-slides` (Cached)
+    - Admin: `GET /api/v1/hero-slides/admin`, `GET /api/v1/hero-slides/:id`, `POST /api/v1/hero-slides`, `PATCH /api/v1/hero-slides/:id`, `DELETE /api/v1/hero-slides/:id`
+  - Updated `wintercart.postman_collection.json` with all Announcements and Hero Slides endpoints
 
 ---
 
