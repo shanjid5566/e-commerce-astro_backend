@@ -1,20 +1,24 @@
 import { NestFactory } from "@nestjs/core";
-import { ValidationPipe, VersioningType } from "@nestjs/common";
+import { ValidationPipe, VersioningType, INestApplication } from "@nestjs/common";
 import { AppModule } from "./app.module";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+export function setupApp(app: INestApplication) {
+  // 1. CORS for Astro Storefront & Admin (allow local and deployed origins)
+  const allowedOrigins = process.env.FRONTEND_URL
+    ? [process.env.FRONTEND_URL, "http://localhost:4321", "http://127.0.0.1:4321"]
+    : true;
 
-  // 1. CORS for Astro Storefront & Admin
   app.enableCors({
-    origin: ["http://localhost:4321", "http://127.0.0.1:4321"],
+    origin: allowedOrigins,
     credentials: true,
   });
 
-  // 2. Global URL Prefix & Versioning: /api/v1/...
-  app.setGlobalPrefix("api");
+  // 2. Global URL Prefix & Versioning: /api/v1/... (exclude '/' for root health check)
+  app.setGlobalPrefix("api", {
+    exclude: ["/"],
+  });
   app.enableVersioning({
     type: VersioningType.URI,
     defaultVersion: "1",
@@ -34,10 +38,18 @@ async function bootstrap() {
 
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new AllExceptionsFilter());
+}
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  setupApp(app);
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
   console.log(`Backend server ready on: http://localhost:${port}/api/v1`);
 }
 
-bootstrap();
+// Only run standalone listener when not in a serverless environment (e.g. Vercel)
+if (!process.env.VERCEL) {
+  bootstrap();
+}

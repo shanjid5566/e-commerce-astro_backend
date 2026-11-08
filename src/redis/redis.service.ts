@@ -28,27 +28,43 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     const port = Number(this.configService.get<Number>("REDIS_PORT", 6379));
     const password = this.configService.get<string>("REDIS_PASSWORD");
 
-    // Use connection string URL if available, otherwise use host/port
-
-    if (redisUrl) {
-      this.client = new Redis(redisUrl, {
-        maxRetriesPerRequest: 3,
-      });
-    } else {
-      this.client = new Redis({
-        host,
-        port,
-        password: password || undefined,
-        maxRetriesPerRequest: 3,
-      });
+    // In serverless environments (e.g. Vercel), if REDIS_URL is not provided, skip connecting to localhost
+    if (!redisUrl && (process.env.VERCEL || process.env.NODE_ENV === "production") && host === "localhost") {
+      this.logger.warn("⚠️ REDIS_URL is not configured in production. Caching will run in bypass mode.");
+      return;
     }
 
-    this.client.on("connect", () => {
-      this.logger.log("✅ Redis connected successfully");
-    });
-    this.client.on("error", (err) => {
-      this.logger.error("❌ Redis connection error:", err.message);
-    });
+    try {
+      if (redisUrl) {
+        this.client = new Redis(redisUrl, {
+          maxRetriesPerRequest: 3,
+          lazyConnect: true,
+          retryStrategy: (times) => (times > 3 ? null : Math.min(times * 100, 1000)),
+        });
+      } else {
+        this.client = new Redis({
+          host,
+          port,
+          password: password || undefined,
+          maxRetriesPerRequest: 3,
+          lazyConnect: true,
+          retryStrategy: (times) => (times > 3 ? null : Math.min(times * 100, 1000)),
+        });
+      }
+
+      this.client.on("connect", () => {
+        this.logger.log("✅ Redis connected successfully");
+      });
+      this.client.on("error", (err) => {
+        this.logger.error("❌ Redis connection error:", err.message);
+      });
+
+      await this.client.connect().catch((err) => {
+        this.logger.warn(`Redis connection failed (${err.message}). Continuing in fallback mode.`);
+      });
+    } catch (err: any) {
+      this.logger.error("❌ Failed to initialize Redis client:", err.message);
+    }
   }
   /**
    * Gracefully close Redis connection on application shutdown.
@@ -64,6 +80,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Retrieve cached item and parse JSON automatically.
    */
   async get<T>(key: string): Promise<T | null> {
+    if (!this.client) return null;
     try {
       const data = await this.client.get(key);
       if (!data) return null;
@@ -78,6 +95,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Store data in Redis with an optional Time-To-Live (TTL in seconds).
    */
   async set(key: string, value: any, ttlSeconds: number = 3600): Promise<void> {
+    if (!this.client) return;
     try {
       const serialized = JSON.stringify(value);
       if (ttlSeconds > 0) {
@@ -94,6 +112,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Delete a specific cache key.
    */
   async del(key: string): Promise<void> {
+    if (!this.client) return;
     try {
       await this.client.del(key);
     } catch (error) {
@@ -107,6 +126,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    */
 
   async invalidatePattern(pattern: string): Promise<void> {
+    if (!this.client) return;
     try {
       const stream = this.client.scanStream({
         match: pattern,

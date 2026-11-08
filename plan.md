@@ -110,15 +110,14 @@
 ---
 
 ### Phase 3: Categories Module (`CategoriesModule`)
-- [ ] **Step 7: Category DTOs & Service**
+- [x] **Step 7: Category DTOs & Service**
   - DTOs: `CreateCategoryDto`, `UpdateCategoryDto`
-  - Service:
-    - `findAll()`: Read from Redis (`cache:categories:all`), fallback to Prisma and cache for 2 hours.
-    - `findBySlug(slug)`: Read category by slug.
-    - `create()`, `update()`, `remove()`: Prisma write + automatically call `redisService.del('cache:categories:all')`.
-- [ ] **Step 8: Category Controller & Module**
+  - Service: `CategoriesService` (Redis read-through caching & automatic cache invalidation)
+- [x] **Step 8: Category Controller & Module**
   - Public routes: `GET /api/v1/categories`, `GET /api/v1/categories/:slug`
   - Admin routes (`@UseGuards(JwtAuthGuard)`): `POST`, `PATCH`, `DELETE`
+  - Updated `wintercart.postman_collection.json` with Categories endpoints
+
 
 ---
 
