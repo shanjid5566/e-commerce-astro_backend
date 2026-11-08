@@ -1,3 +1,4 @@
+// backend/src/app.setup.ts
 import {
   INestApplication,
   ValidationPipe,
@@ -8,6 +9,7 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import * as express from "express";
 import { join } from "path";
 import * as fs from "fs";
+import * as os from "os";
 
 /**
  * Shared configuration for both standalone server and serverless function.
@@ -24,9 +26,16 @@ export function setupApp(app: INestApplication) {
   });
 
   // 2. Static File Serving for Uploaded Media
-  const uploadsDir = join(process.cwd(), "uploads");
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
+  const uploadsDir = process.env.VERCEL
+    ? join(os.tmpdir(), "uploads")
+    : join(process.cwd(), "uploads");
+
+  try {
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+  } catch {
+    // Read-only filesystem safeguard for serverless environments
   }
   app.use("/uploads", express.static(uploadsDir));
 
@@ -54,5 +63,3 @@ export function setupApp(app: INestApplication) {
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new AllExceptionsFilter());
 }
-
-

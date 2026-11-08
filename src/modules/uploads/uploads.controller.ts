@@ -13,19 +13,44 @@ import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { Request } from 'express';
 import { UploadsService } from './uploads.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-// Ensure the local uploads directory exists
-const UPLOAD_DIR = join(process.cwd(), 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+/**
+ * Determine the uploads storage directory.
+ * In serverless environments (e.g. AWS Lambda / Vercel), /var/task is read-only,
+ * so we fall back to os.tmpdir() (/tmp).
+ */
+const getUploadDir = (): string => {
+  if (process.env.VERCEL) {
+    return join(os.tmpdir(), 'uploads');
+  }
+  return join(process.cwd(), 'uploads');
+};
+
+const UPLOAD_DIR = getUploadDir();
+
+// Ensure the local uploads directory exists safely without crashing serverless boots
+try {
+  if (!fs.existsSync(UPLOAD_DIR)) {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  }
+} catch {
+  // Read-only filesystem safeguard for serverless environments
 }
 
 // Multer storage configuration with collision-resistant naming
 const multerStorage = diskStorage({
   destination: (req, file, cb) => {
+    try {
+      if (!fs.existsSync(UPLOAD_DIR)) {
+        fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+      }
+    } catch {
+      // Ignore directory creation errors in serverless
+    }
     cb(null, UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
@@ -102,4 +127,3 @@ export class UploadsController {
     return this.uploadsService.formatMultipleFilesResponse(files, req);
   }
 }
-

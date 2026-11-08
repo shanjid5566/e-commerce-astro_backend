@@ -3,6 +3,7 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { Request } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 export interface UploadedFileResponse {
   url: string;
@@ -60,7 +61,10 @@ export class UploadsService {
    */
   async deleteFile(filename: string): Promise<boolean> {
     try {
-      const filePath = path.join(process.cwd(), 'uploads', filename);
+      const uploadDir = process.env.VERCEL
+        ? path.join(os.tmpdir(), 'uploads')
+        : path.join(process.cwd(), 'uploads');
+      const filePath = path.join(uploadDir, filename);
       if (fs.existsSync(filePath)) {
         await fs.promises.unlink(filePath);
         return true;
