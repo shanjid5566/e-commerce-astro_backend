@@ -120,13 +120,17 @@ model HeroSlide {
 }
 
 model Announcement {
-  id        String   @id @default(cuid())
-  icon      String   @default("🔥")
+  id        String    @id @default(cuid())
+  icon      String    @default("🔥")
   text      String
   link      String?
-  isActive  Boolean  @default(true)
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
+  isActive  Boolean   @default(true)
+  order     Int       @default(0)
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([isActive])
 }
 
 model SupportTicket {

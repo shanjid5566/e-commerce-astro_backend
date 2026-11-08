@@ -7,7 +7,7 @@ import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
 
 const CACHE_KEY_ACTIVE = 'cache:announcements:active';
 const CACHE_KEY_ALL = 'cache:announcements:all';
-const CACHE_TTL_SECONDS = 1800; // 30 minutes
+const CACHE_TTL_SECONDS = 300; // 5 minutes TTL for scheduling freshness
 
 @Injectable()
 export class AnnouncementsService {
@@ -20,7 +20,7 @@ export class AnnouncementsService {
 
   /**
    * Fetch active announcements for storefront top ticker.
-   * Leverages multi-tier caching for sub-millisecond responses.
+   * Respects optional startDate and endDate scheduling windows.
    */
   async findActive() {
     const cached = await this.redis.get<any[]>(CACHE_KEY_ACTIVE);
@@ -28,8 +28,20 @@ export class AnnouncementsService {
       return cached;
     }
 
+    const now = new Date();
+
     const announcements = await this.prisma.announcement.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        AND: [
+          {
+            OR: [{ startDate: null }, { startDate: { lte: now } }],
+          },
+          {
+            OR: [{ endDate: null }, { endDate: { gte: now } }],
+          },
+        ],
+      },
       orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
     });
 
@@ -70,7 +82,7 @@ export class AnnouncementsService {
   }
 
   /**
-   * Create a new announcement and evict cached lists asynchronously.
+   * Create a new announcement with optional scheduling dates.
    */
   async create(dto: CreateAnnouncementDto) {
     const created = await this.prisma.announcement.create({
@@ -80,6 +92,8 @@ export class AnnouncementsService {
         link: dto.link ?? null,
         isActive: dto.isActive ?? true,
         order: dto.order ?? 0,
+        startDate: dto.startDate ? new Date(dto.startDate) : null,
+        endDate: dto.endDate ? new Date(dto.endDate) : null,
       },
     });
 
@@ -101,6 +115,12 @@ export class AnnouncementsService {
         ...(dto.link !== undefined && { link: dto.link }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
         ...(dto.order !== undefined && { order: dto.order }),
+        ...(dto.startDate !== undefined && {
+          startDate: dto.startDate ? new Date(dto.startDate) : null,
+        }),
+        ...(dto.endDate !== undefined && {
+          endDate: dto.endDate ? new Date(dto.endDate) : null,
+        }),
       },
     });
 
@@ -134,4 +154,3 @@ export class AnnouncementsService {
     });
   }
 }
-
