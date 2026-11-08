@@ -118,6 +118,17 @@
   - Admin routes (`@UseGuards(JwtAuthGuard)`): `POST`, `PATCH`, `DELETE`
   - Updated `wintercart.postman_collection.json` with Categories endpoints
 
+---
+
+### Phase 3.5: Media & Image Uploads Module (`UploadsModule`)
+- [x] **Dedicated Upload Service & Controller**
+  - `src/modules/uploads/uploads.service.ts` (Absolute URL generation, file validation, deletion)
+  - `src/modules/uploads/uploads.controller.ts` (`POST /api/v1/uploads/image`, `POST /api/v1/uploads/images`)
+  - `src/modules/uploads/uploads.module.ts`
+  - Static file hosting at `http://localhost:3000/uploads/...`
+  - Updated `wintercart.postman_collection.json` with Uploads endpoints
+
+
 
 ---
 

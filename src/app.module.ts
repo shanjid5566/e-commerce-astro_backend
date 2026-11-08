@@ -6,6 +6,7 @@ import { PrismaModule } from "./database/prisma.module";
 import { RedisModule } from "./redis/redis.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CategoriesModule } from "./modules/categories/categories.module";
+import { UploadsModule } from "./modules/uploads/uploads.module";
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -16,6 +17,7 @@ import { CategoriesModule } from "./modules/categories/categories.module";
     RedisModule,
     AuthModule,
     CategoriesModule,
+    UploadsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

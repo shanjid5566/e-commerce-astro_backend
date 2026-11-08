@@ -5,6 +5,9 @@ import {
 } from "@nestjs/common";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
+import * as express from "express";
+import { join } from "path";
+import * as fs from "fs";
 
 /**
  * Shared configuration for both standalone server and serverless function.
@@ -20,16 +23,23 @@ export function setupApp(app: INestApplication) {
     credentials: true,
   });
 
-  // 2. Global URL Prefix & Versioning: /api/v1/... (exclude '/' for root health check)
+  // 2. Static File Serving for Uploaded Media
+  const uploadsDir = join(process.cwd(), "uploads");
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  app.use("/uploads", express.static(uploadsDir));
+
+  // 3. Global URL Prefix & Versioning: /api/v1/... (exclude '/' and '/uploads' for static assets)
   app.setGlobalPrefix("api", {
-    exclude: ["/"],
+    exclude: ["/", "/uploads/(.*)"],
   });
   app.enableVersioning({
     type: VersioningType.URI,
     defaultVersion: "1",
   });
 
-  // 3. Strict Payload Validation Pipe
+  // 4. Strict Payload Validation Pipe
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -44,4 +54,5 @@ export function setupApp(app: INestApplication) {
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new AllExceptionsFilter());
 }
+
 

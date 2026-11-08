@@ -23,7 +23,9 @@ Thumbs.db
 *.sln
 *.sw?
 
-# Environment
+# Uploads
+/uploads
+
 .env
 .env.local
 .env.development.local
